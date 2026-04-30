@@ -297,19 +297,19 @@ public class PartyListWindow(PassportCheckerReborn plugin) : Window("Party Membe
             ImGui.SameLine();
             if (cachedFf is null || !cachedFf.HasData)
             {
-                OverlayWindow.DrawNoLogsWithAverage(cachedFf?.AverageParsePercent);
+                PFWindow.DrawNoLogsWithAverage(cachedFf?.AverageParsePercent);
             }
             else if (cachedFf.BestParse.HasValue)
             {
                 // Show best parse for current job
                 if (cachedFf.CurrentJobBestParse.HasValue)
                 {
-                    var color = OverlayWindow.GetParseColor(cachedFf.CurrentJobBestParse.Value);
+                    var color = PFWindow.GetParseColor(cachedFf.CurrentJobBestParse.Value);
                     ImGui.TextColored(color, $"{cachedFf.CurrentJobBestParse.Value:F0}%");
                 }
                 else
                 {
-                    var color = OverlayWindow.GetParseColor(cachedFf.BestParse.Value);
+                    var color = PFWindow.GetParseColor(cachedFf.BestParse.Value);
                     ImGui.TextColored(color, $"{cachedFf.BestParse.Value:F0}%");
                 }
 
@@ -320,13 +320,13 @@ public class PartyListWindow(PassportCheckerReborn plugin) : Window("Party Membe
                     (!cachedFf.CurrentJobBestParse.HasValue ||
                      cachedFf.BestParse.Value > cachedFf.CurrentJobBestParse.Value))
                 {
-                    OverlayWindow.DrawJobSpecBestParse(cachedFf.BestParse.Value,
+                    PFWindow.DrawJobSpecBestParse(cachedFf.BestParse.Value,
                         cachedFf.BestParseJobAbbreviation, cachedFf.BestParseJobIconId);
                 }
             }
             else if (cachedFf.AverageParsePercent.HasValue)
             {
-                OverlayWindow.DrawNoLogsWithAverage(cachedFf.AverageParsePercent);
+                PFWindow.DrawNoLogsWithAverage(cachedFf.AverageParsePercent);
             }
             else
             {

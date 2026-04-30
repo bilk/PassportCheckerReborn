@@ -39,7 +39,7 @@ public sealed class PassportCheckerReborn : IDalamudPlugin
 
     public readonly WindowSystem WindowSystem = new("PassportCheckerReborn");
     private MainWindow MainWindow { get; init; }
-    internal OverlayWindow OverlayWindow { get; init; }
+    internal PFWindow PFWindow { get; init; }
     internal PartyListWindow PartyListWindow { get; init; }
 
     internal TomestoneService TomestoneService { get; init; }
@@ -59,11 +59,11 @@ public sealed class PassportCheckerReborn : IDalamudPlugin
         PartyFinderManager = new PartyFinderManager(this);
 
         MainWindow = new MainWindow(this);
-        OverlayWindow = new OverlayWindow(this);
+        PFWindow = new PFWindow(this);
         PartyListWindow = new PartyListWindow(this);
 
         WindowSystem.AddWindow(MainWindow);
-        WindowSystem.AddWindow(OverlayWindow);
+        WindowSystem.AddWindow(PFWindow);
         WindowSystem.AddWindow(PartyListWindow);
 
         CommandManager.AddHandler(CommandName, new CommandInfo(OnCommand)
@@ -95,7 +95,7 @@ public sealed class PassportCheckerReborn : IDalamudPlugin
         WindowSystem.RemoveAllWindows();
 
         MainWindow.Dispose();
-        OverlayWindow.Dispose();
+        PFWindow.Dispose();
         PartyListWindow.Dispose();
 
         PartyFinderManager.Dispose();
@@ -122,7 +122,7 @@ public sealed class PassportCheckerReborn : IDalamudPlugin
     }
 
     public void ToggleMainUi() => MainWindow.Toggle();
-    public void ToggleOverlay() => OverlayWindow.Toggle();
+    public void ToggleOverlay() => PFWindow.Toggle();
 
     /// <summary>
     /// Runs every frame before WindowSystem.Draw to manage auto-open/close

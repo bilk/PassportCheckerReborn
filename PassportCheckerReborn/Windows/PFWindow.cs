@@ -16,7 +16,7 @@ namespace PassportCheckerReborn.Windows;
 /// <see cref="Services.PartyFinderManager"/>) and, via two shared buttons below the
 /// player list, performs batch Tomestone / FFLogs lookups for every member at once.
 /// </summary>
-public class OverlayWindow(PassportCheckerReborn plugin) : Window("PF Member Info##PFCheckerOverlay",
+public class PFWindow(PassportCheckerReborn plugin) : Window("PF Member Info##PFCheckerOverlay",
            ImGuiWindowFlags.NoTitleBar |
                ImGuiWindowFlags.NoResize |
                ImGuiWindowFlags.NoMove |
@@ -315,15 +315,33 @@ public class OverlayWindow(PassportCheckerReborn plugin) : Window("PF Member Inf
         }
 
         // Player label
-        var isResolved = !member.Name.StartsWith(Services.PartyFinderManager.UnresolvedNamePrefix);
-        var displayName = cfg.ShowResolvedPlayerNames && isResolved
-            ? $"{member.Name}@{member.World}"
-            : $"Player {index + 1}";
+        var isUnresolved = member.Name.StartsWith(PartyFinderManager.UnresolvedNamePrefix)
+            || member.Name.StartsWith(PartyFinderManager.UnresolvedPlayerPrefix);
+        var isResolved = !isUnresolved;
+        string displayName;
+        if (member.IsPrivate)
+            displayName = $"Private Player {index + 1}";
+        else if (isUnresolved && member.Name.StartsWith(PartyFinderManager.UnresolvedPlayerPrefix))
+            displayName = member.Name;
+        else if (cfg.ShowResolvedPlayerNames && isResolved)
+            displayName = $"{member.Name}@{member.World}";
+        else
+            displayName = $"Player {index + 1}";
 
-        if (isKnown)
+        if (member.IsPrivate)
+            ImGui.TextColored(new Vector4(0.5f, 0.5f, 0.5f, 1.0f), displayName);
+        else if (isKnown)
             ImGui.TextColored(cfg.KnownPlayerBorderColor, displayName);
         else
             ImGui.TextUnformatted(displayName);
+
+        if (member.IsPrivate)
+        {
+            ImGui.SameLine();
+            ImGui.TextColored(new Vector4(0.5f, 0.5f, 0.5f, 1.0f), "[Private]");
+            if (ImGui.IsItemHovered())
+                ImGui.SetTooltip("Adventure plate is hidden or unavailable");
+        }
 
         if (isBlacklisted)
         {
@@ -334,7 +352,7 @@ public class OverlayWindow(PassportCheckerReborn plugin) : Window("PF Member Inf
         }
 
         // ── Cached Tomestone data
-        if (cfg.EnableTomestoneIntegration && !string.IsNullOrEmpty(cfg.TomestoneApiKey) && tomestoneFetched)
+        if (!member.IsPrivate && cfg.EnableTomestoneIntegration && !string.IsNullOrEmpty(cfg.TomestoneApiKey) && tomestoneFetched)
         {
             if (tomestoneBatchInProgress)
             {
@@ -385,7 +403,7 @@ public class OverlayWindow(PassportCheckerReborn plugin) : Window("PF Member Inf
         }
 
         // ── Cached FFLogs encounter data (only shown after user clicks FFLogs button) ──
-        if (cfg.EnableFFLogsIntegrationOverlay && !string.IsNullOrEmpty(cfg.FFLogsClientId) && !string.IsNullOrEmpty(cfg.FFLogsClientSecret) && fflogsFetched)
+        if (!member.IsPrivate && cfg.EnableFFLogsIntegrationOverlay && !string.IsNullOrEmpty(cfg.FFLogsClientId) && !string.IsNullOrEmpty(cfg.FFLogsClientSecret) && fflogsFetched)
         {
             if (fflogsBatchInProgress)
             {
@@ -540,7 +558,15 @@ public class OverlayWindow(PassportCheckerReborn plugin) : Window("PF Member Inf
                 // Encounter-specific batch query
                 var memberData = new List<(string Name, string World, string JobAbbreviation)>();
                 for (var i = 0; i < members.Count; i++)
-                    memberData.Add((members[i].Name, members[i].World, members[i].JobAbbreviation));
+                {
+                    var m = members[i];
+                    var isUnresolvedSlot = m.IsPrivate
+                        || m.Name.StartsWith(PartyFinderManager.UnresolvedNamePrefix)
+                        || m.Name.StartsWith(PartyFinderManager.UnresolvedPlayerPrefix);
+                    memberData.Add(isUnresolvedSlot
+                        ? (string.Empty, string.Empty, m.JobAbbreviation)
+                        : (m.Name, m.World, m.JobAbbreviation));
+                }
 
                 Dictionary<int, EncounterParseResult> results;
                 if (encounterIds.Value.SecondaryEncounterId.HasValue)
@@ -578,7 +604,9 @@ public class OverlayWindow(PassportCheckerReborn plugin) : Window("PF Member Inf
                                             cached.Phase2BestParse.HasValue ||
                                             cached.Phase2LowestBossHpPct.HasValue);
 
-                    if (cached is not null && !hasEncounterData)
+                    var isUnresolvedMember = members[i].Name.StartsWith(PartyFinderManager.UnresolvedNamePrefix)
+                        || members[i].Name.StartsWith(PartyFinderManager.UnresolvedPlayerPrefix);
+                    if (cached is not null && !hasEncounterData && !members[i].IsPrivate && !isUnresolvedMember)
                     {
                         try
                         {
@@ -599,6 +627,14 @@ public class OverlayWindow(PassportCheckerReborn plugin) : Window("PF Member Inf
                 for (var i = 0; i < members.Count; i++)
                 {
                     var member = members[i];
+                    if (member.IsPrivate
+                        || member.Name.StartsWith(PartyFinderManager.UnresolvedNamePrefix)
+                        || member.Name.StartsWith(PartyFinderManager.UnresolvedPlayerPrefix))
+                    {
+                        tempCache[i] = null;
+                        continue;
+                    }
+
                     try
                     {
                         var avg = await plugin.FFLogsService.GetBestPerfAvgAsync(
@@ -667,6 +703,14 @@ public class OverlayWindow(PassportCheckerReborn plugin) : Window("PF Member Inf
             for (var i = 0; i < members.Count; i++)
             {
                 var member = members[i];
+                if (member.IsPrivate
+                    || member.Name.StartsWith(PartyFinderManager.UnresolvedNamePrefix)
+                    || member.Name.StartsWith(PartyFinderManager.UnresolvedPlayerPrefix))
+                {
+                    tempCache[i] = null;
+                    continue;
+                }
+
                 try
                 {
                     var info = await plugin.TomestoneService.GetCharacterInfoAsync(
@@ -823,4 +867,5 @@ public record PartyMemberInfo(
     string Name,
     string World,
     string JobAbbreviation,
-    ulong ContentId = 0);
+    ulong ContentId = 0,
+    bool IsPrivate = false);

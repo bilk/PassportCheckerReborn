@@ -43,6 +43,8 @@ public sealed partial class TomestoneService : IDisposable
             // ── Dawntrail Ultimates ──────────────────────────────────────────────
             ["Futures Rewritten (Ultimate)"] =
                 new("dawntrail", "ultimates", "futures-rewritten-ultimate"),
+            ["Dancing Mad (Ultimate)"] =
+                new("dawntrail", "ultimates", "dancing-mad-ultimate"),
 
             // ── Endwalker Ultimates ──────────────────────────────────────────────
             ["The Omega Protocol (Ultimate)"] =
@@ -72,16 +74,6 @@ public sealed partial class TomestoneService : IDisposable
             ["AAC Heavyweight M4 (Savage) P2"] =
                 new("dawntrail", "aac-heavyweight-savage", "lindwurm-ii"),
 
-            // ── Dawntrail Savage – AAC Cruiserweight ─────────────────────────────
-            ["AAC Cruiserweight M1 (Savage)"] =
-                new("dawntrail", "aac-cruiserweight-savage", "dancing-green"),
-            ["AAC Cruiserweight M2 (Savage)"] =
-                new("dawntrail", "aac-cruiserweight-savage", "honey-b-lovely"),
-            ["AAC Cruiserweight M3 (Savage)"] =
-                new("dawntrail", "aac-cruiserweight-savage", "brute-bomber"),
-            ["AAC Cruiserweight M4 (Savage)"] =
-                new("dawntrail", "aac-cruiserweight-savage", "wicked-thunder"),
-
             // ── Dawntrail Savage – AAC Light-heavyweight ─────────────────────────
             ["AAC Light-heavyweight M1 (Savage)"] =
                 new("dawntrail", "aac-light-heavyweight-savage", "black-cat"),
@@ -92,29 +84,39 @@ public sealed partial class TomestoneService : IDisposable
             ["AAC Light-heavyweight M4 (Savage)"] =
                 new("dawntrail", "aac-light-heavyweight-savage", "wicked-thunder"),
 
+            // ── Dawntrail Savage – AAC Cruiserweight ─────────────────────────────
+            ["AAC Cruiserweight M1 (Savage)"] =
+                new("dawntrail", "aac-cruiserweight-savage", "dancing-green"),
+            ["AAC Cruiserweight M2 (Savage)"] =
+                new("dawntrail", "aac-cruiserweight-savage", "honey-b-lovely"),
+            ["AAC Cruiserweight M3 (Savage)"] =
+                new("dawntrail", "aac-cruiserweight-savage", "brute-bomber"),
+            ["AAC Cruiserweight M4 (Savage)"] =
+                new("dawntrail", "aac-cruiserweight-savage", "wicked-thunder"),
+
             // ── Dawntrail Extreme Trials ──────────────────────────────────────────
             ["Worqor Lar Dor (Extreme)"] =
-                new("dawntrail", "extremes", "worqor-lar-dor"),
+                new("dawntrail", "trials-extreme", "valigarmanda"),
             ["Everkeep (Extreme)"] =
-                new("dawntrail", "extremes", "everkeep"),
+                new("dawntrail", "trials-extreme", "everkept"),
             ["The Minstrel's Ballad: Sphene's Burden"] =
-                new("dawntrail", "extremes", "the-minstrels-ballad-sphenes-burden"),
+                new("dawntrail", "trials-extreme", "queen-eternal"),
             ["Recollection (Extreme)"] =
-                new("dawntrail", "extremes", "recollection"),
+                new("dawntrail", "trials-extreme", "zelenia"),
             ["The Minstrel's Ballad: Necron's Embrace"] =
-                new("dawntrail", "extremes", "the-minstrels-ballad-necrons-embrace"),
+                new("dawntrail", "trials-extreme", "necron"),
             ["The Windward Wilds (Extreme)"] =
-                new("dawntrail", "extremes", "the-windward-wilds"),
+                new("dawntrail", "trials-extreme", "guardian-arkveld"),
             ["Hell on Rails (Extreme)"] =
-                new("dawntrail", "extremes", "hell-on-rails"),
+                new("dawntrail", "trials-extreme", "doomtrain"),
             ["The Unmaking (Extreme)"] =
-                new("dawntrail", "extremes", "the-unmaking"),
+                new("dawntrail", "trials-extreme", "enuo"),
 
             // ── Dawntrail Unreal ──────────────────────────────────────────────────
             ["Tsukuyomi's Pain (Unreal)"] =
-                new("dawntrail", "extremes", "tsukuyomis-pain"),
+                new("dawntrail", "unreal", "tsukuyomis-pain"),
             ["Shinryu's Domain (Unreal)"] =
-                new("dawntrail", "extremes", "shinryus-domain"),
+                new("dawntrail", "unreal", "shinryu"),
 
             // ── Dawntrail Chaotic ─────────────────────────────────────────────────
             ["The Cloud of Darkness (Chaotic)"] =
@@ -134,6 +136,17 @@ public sealed partial class TomestoneService : IDisposable
         {
             ["AAC Heavyweight M4 (Savage)"] =
             new("dawntrail", "aac-heavyweight-savage", "lindwurm-ii"),
+        };
+
+    /// <summary>
+    /// Fallback encounter parameters for multi-part duties.  When the preferred
+    /// phase (P2) returns no data the lookup retries with these P1 params.
+    /// </summary>
+    private static readonly Dictionary<string, TomestoneEncounterParams> MultiPartDutyFallbackParams =
+        new(StringComparer.OrdinalIgnoreCase)
+        {
+            ["AAC Heavyweight M4 (Savage)"] =
+            new("dawntrail", "aac-heavyweight-savage", "lindwurm"),
         };
 
     /// <summary>
@@ -203,10 +216,14 @@ public sealed partial class TomestoneService : IDisposable
 
         // Resolve Tomestone encounter parameters for the duty
         TomestoneEncounterParams? encounterParams = null;
+        TomestoneEncounterParams? fallbackEncounterParams = null;
         if (!string.IsNullOrWhiteSpace(dutyName))
         {
             if (!DutyNameToTomestoneParams.TryGetValue(dutyName, out encounterParams))
+            {
                 MultiPartDutyToTomestoneParams.TryGetValue(dutyName, out encounterParams);
+                MultiPartDutyFallbackParams.TryGetValue(dutyName, out fallbackEncounterParams);
+            }
         }
 
         var server = Uri.EscapeDataString(world);
@@ -229,6 +246,19 @@ public sealed partial class TomestoneService : IDisposable
         }
         else if (!string.IsNullOrWhiteSpace(dutyName) && encounterParams == null)
         {
+        }
+
+        // ── P1 fallback for multi-part encounters (e.g. M4S P2 had no data) ─
+        if (fallbackEncounterParams != null && info.ProgPoint == null && !info.TotalClears.HasValue)
+        {
+            if (!string.IsNullOrWhiteSpace(info.CharacterId))
+                await FetchFullProfileByIdAsync(info, info.CharacterId, dutyName, fallbackEncounterParams);
+
+            if (info.ProgPoint == null && !info.TotalClears.HasValue)
+            {
+                await FetchProgressionGraphAsync(info, server, name, fallbackEncounterParams);
+                await FetchActivityAsync(info, server, name, fallbackEncounterParams);
+            }
         }
 
         return info;

@@ -7,10 +7,12 @@ using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Client.UI.Info;
 using PassportCheckerReborn.Services;
 using PassportCheckerReborn.Windows;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace PassportCheckerReborn;
 
-public sealed class PassportCheckerReborn : IDalamudPlugin
+public sealed class PassportCheckerReborn : IAsyncDalamudPlugin
 {
     [PluginService] internal static IDalamudPluginInterface PluginInterface { get; private set; } = null!;
     [PluginService] internal static ITextureProvider TextureProvider { get; private set; } = null!;
@@ -35,20 +37,20 @@ public sealed class PassportCheckerReborn : IDalamudPlugin
     public const string ALTCOMMAND = "/pcr";
     private const string PartyListCommandName = "/pcrparty";
 
-    public Configuration Configuration { get; init; }
+    public Configuration Configuration { get; private set; } = null!;
 
     public readonly WindowSystem WindowSystem = new("PassportCheckerReborn");
-    private MainWindow MainWindow { get; init; }
-    internal PFWindow PFWindow { get; init; }
-    internal PartyListWindow PartyListWindow { get; init; }
+    private MainWindow MainWindow { get; set; } = null!;
+    internal PFWindow PFWindow { get; set; } = null!;
+    internal PartyListWindow PartyListWindow { get; set; } = null!;
 
-    internal TomestoneService TomestoneService { get; init; }
-    internal FFLogsService FFLogsService { get; init; }
-    internal CidCache CidCache { get; init; }
-    internal BlacklistCache BlacklistCache { get; init; }
-    internal PartyFinderManager PartyFinderManager { get; init; }
+    internal TomestoneService TomestoneService { get; private set; } = null!;
+    internal FFLogsService FFLogsService { get; private set; } = null!;
+    internal CidCache CidCache { get; private set; } = null!;
+    internal BlacklistCache BlacklistCache { get; private set; } = null!;
+    internal PartyFinderManager PartyFinderManager { get; private set; } = null!;
 
-    public PassportCheckerReborn()
+    public async Task LoadAsync(CancellationToken cancellationToken)
     {
         Configuration = PluginInterface.GetPluginConfig() as Configuration ?? new Configuration();
 
@@ -56,57 +58,67 @@ public sealed class PassportCheckerReborn : IDalamudPlugin
         FFLogsService = new FFLogsService(this);
         CidCache = new CidCache();
         BlacklistCache = new BlacklistCache();
-        PartyFinderManager = new PartyFinderManager(this);
 
-        MainWindow = new MainWindow(this);
-        PFWindow = new PFWindow(this);
-        PartyListWindow = new PartyListWindow(this);
-
-        WindowSystem.AddWindow(MainWindow);
-        WindowSystem.AddWindow(PFWindow);
-        WindowSystem.AddWindow(PartyListWindow);
-
-        CommandManager.AddHandler(CommandName, new CommandInfo(OnCommand)
+        // Hook registration and addon event subscriptions must run on the main thread.
+        await Framework.RunOnFrameworkThread(() =>
         {
-            HelpMessage = "Open Passport Check Reborn menu."
-        });
-        CommandManager.AddHandler(ALTCOMMAND, new CommandInfo(OnCommand)
-        {
-            HelpMessage = "Open Passport Check Reborn menu."
-        });
-        CommandManager.AddHandler(PartyListCommandName, new CommandInfo(OnPartyListCommand)
-        {
-            HelpMessage = "Toggle the Party List Overlay on or off."
-        });
+            PartyFinderManager = new PartyFinderManager(this);
 
-        PluginInterface.UiBuilder.Draw += ManageWindowStates;
-        PluginInterface.UiBuilder.Draw += WindowSystem.Draw;
-        PluginInterface.UiBuilder.OpenMainUi += ToggleMainUi;
+            MainWindow = new MainWindow(this);
+            PFWindow = new PFWindow(this);
+            PartyListWindow = new PartyListWindow(this);
+
+            WindowSystem.AddWindow(MainWindow);
+            WindowSystem.AddWindow(PFWindow);
+            WindowSystem.AddWindow(PartyListWindow);
+
+            CommandManager.AddHandler(CommandName, new CommandInfo(OnCommand)
+            {
+                HelpMessage = "Open Passport Check Reborn menu."
+            });
+            CommandManager.AddHandler(ALTCOMMAND, new CommandInfo(OnCommand)
+            {
+                HelpMessage = "Open Passport Check Reborn menu."
+            });
+            CommandManager.AddHandler(PartyListCommandName, new CommandInfo(OnPartyListCommand)
+            {
+                HelpMessage = "Toggle the Party List Overlay on or off."
+            });
+
+            PluginInterface.UiBuilder.Draw += ManageWindowStates;
+            PluginInterface.UiBuilder.Draw += WindowSystem.Draw;
+            PluginInterface.UiBuilder.OpenMainUi += ToggleMainUi;
+        });
 
         Log.Information($"[PassportCheckerReborn] Plugin loaded.");
     }
 
-    public void Dispose()
+    public async ValueTask DisposeAsync()
     {
-        PluginInterface.UiBuilder.Draw -= ManageWindowStates;
-        PluginInterface.UiBuilder.Draw -= WindowSystem.Draw;
-        PluginInterface.UiBuilder.OpenMainUi -= ToggleMainUi;
+        // Hook teardown and UI deregistration must run on the main thread.
+        await Framework.RunOnFrameworkThread(() =>
+        {
+            PluginInterface.UiBuilder.Draw -= ManageWindowStates;
+            PluginInterface.UiBuilder.Draw -= WindowSystem.Draw;
+            PluginInterface.UiBuilder.OpenMainUi -= ToggleMainUi;
 
-        WindowSystem.RemoveAllWindows();
+            WindowSystem.RemoveAllWindows();
 
-        MainWindow.Dispose();
-        PFWindow.Dispose();
-        PartyListWindow.Dispose();
+            MainWindow?.Dispose();
+            PFWindow?.Dispose();
+            PartyListWindow?.Dispose();
 
-        PartyFinderManager.Dispose();
-        CidCache.Dispose();
-        BlacklistCache.Dispose();
-        TomestoneService.Dispose();
-        FFLogsService.Dispose();
+            PartyFinderManager?.Dispose();
 
-        CommandManager.RemoveHandler(CommandName);
-        CommandManager.RemoveHandler(ALTCOMMAND);
-        CommandManager.RemoveHandler(PartyListCommandName);
+            CommandManager.RemoveHandler(CommandName);
+            CommandManager.RemoveHandler(ALTCOMMAND);
+            CommandManager.RemoveHandler(PartyListCommandName);
+        });
+
+        CidCache?.Dispose();
+        BlacklistCache?.Dispose();
+        TomestoneService?.Dispose();
+        FFLogsService?.Dispose();
     }
 
     private void OnCommand(string command, string args)

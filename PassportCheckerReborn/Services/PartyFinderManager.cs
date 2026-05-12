@@ -89,25 +89,7 @@ public sealed class PartyFinderManager : IDisposable
     }
 
     // ── Prevent auto-close on party changes ──────────────────────────────────
-    private Hook<AtkUnitBase.Delegates.Close>? closeAddonHook;
     private int trackedPartyMemberCount;
-
-    /// <summary>
-    /// When <c>true</c>, a party-change close was already detected this frame.
-    /// Remains active until the next framework tick so that ALL PF addon close
-    /// calls within the same game event are suppressed (the game fires Close on
-    /// both LookingForGroup and LookingForGroupDetail in a single pass).
-    /// </summary>
-    private bool partyChangeSuppressionActive;
-
-    /// <summary>
-    /// The party count observed the moment suppression was first activated.
-    /// Used by <see cref="OnDeferredPartyCountSync"/> as a fallback instead of
-    /// re-querying, so that a transitional cross-realm state (where both
-    /// IPartyList and InfoProxyCrossRealm temporarily report 0) cannot reset the
-    /// tracked count to 0 and cause permanent close-suppression.
-    /// </summary>
-    private int suppressionObservedCount;
 
     // ── Auto-refresh ─────────────────────────────────────────────────────────
     private System.Timers.Timer? autoRefreshTimer;
@@ -295,22 +277,6 @@ public sealed class PartyFinderManager : IDisposable
             //PassportCheckerReborn.Log.Warning(ex, "[PartyFinderManager] Failed to hook CharaCard/ShowLogMessage.");
         }
 
-        // ── AtkUnitBase.Close hook (prevent PF close on party changes) ────────
-        // Close is a virtual function (vtable index 4, offset 32) so there is no
-        // static Addresses entry. Read the function pointer from the base vtable.
-        try
-        {
-            var closeAddress = (nint)AtkUnitBase.StaticVirtualTablePointer->Close;
-            closeAddonHook = PassportCheckerReborn.GameInteropProvider.HookFromAddress<AtkUnitBase.Delegates.Close>(
-                closeAddress,
-                CloseAddonDetour);
-            closeAddonHook.Enable();
-        }
-        catch (Exception)
-        {
-            //PassportCheckerReborn.Log.Warning(ex, "[PartyFinderManager] Failed to hook AtkUnitBase.Close.");
-        }
-
         // ── Track party member count (initial snapshot for close-suppression) ──
         trackedPartyMemberCount = GetEffectivePartyCount();
         //PassportCheckerReborn.Log.Information(
@@ -324,147 +290,12 @@ public sealed class PartyFinderManager : IDisposable
         }
     }
 
-    // ═════════════════════════════════════════════════════════════════════════
-    // Prevent Auto-Close on Party Changes
-    // ═════════════════════════════════════════════════════════════════════════
-
-    /// <summary>
-    /// Detour for <see cref="AtkUnitBase.Close"/>. When the setting is enabled,
-    /// suppresses close calls on LookingForGroup / LookingForGroupDetail that
-    /// are triggered by a party composition change rather than by the user.
-    /// </summary>
-    private unsafe bool CloseAddonDetour(AtkUnitBase* unitBase, bool a1)
-    {
-        try
-        {
-            var addonName = unitBase->NameString;
-
-            if (addonName is "LookingForGroupDetail" or "LookingForGroup")
-            {
-                var currentCount = GetEffectivePartyCount();
-                //PassportCheckerReborn.Log.Information(
-                //    $"[PartyFinderManager] Close called on {addonName} " +
-                //    $"(a1={a1}, config={plugin.Configuration.PreventAutoClosingOnPartyChanges}, " +
-                //    $"detailOpen={IsDetailOpen}, listOpen={IsListOpen}, " +
-                //    $"trackedCount={trackedPartyMemberCount}, effectiveCount={currentCount}, " +
-                //    $"suppressionActive={partyChangeSuppressionActive})");
-
-                if (plugin.Configuration.PreventAutoClosingOnPartyChanges
-                    && IsDetailOpen)
-                {
-                    // Suppress if the party count changed OR if another PF addon
-                    // close in the same frame already triggered suppression (the
-                    // game fires Close on both addons in one pass).
-                    // Never suppress when the effective count is 0 — that means the
-                    // party disbanded or the player left entirely, so there is no
-                    // active party left to justify keeping PF open.  Continued
-                    // suppression in that state would lock the user out of closing
-                    // the window manually.
-                    if (currentCount > 0
-                        && (currentCount != trackedPartyMemberCount || partyChangeSuppressionActive))
-                    {
-                        if (!partyChangeSuppressionActive)
-                        {
-                            // First detection this frame — start the suppression
-                            // window and schedule a deferred count sync + state
-                            // verification on the next framework tick.
-                            partyChangeSuppressionActive = true;
-                            suppressionObservedCount = currentCount;
-                            PassportCheckerReborn.Framework.Update += OnDeferredPartyCountSync;
-                        }
-
-                        //PassportCheckerReborn.Log.Information(
-                        //    $"[PartyFinderManager] SUPPRESSING close for {addonName} " +
-                        //    $"(party: {trackedPartyMemberCount}\u2192{currentCount}).");
-                        return false;
-                    }
-
-                    // If suppression was active but the party is now gone, clean up
-                    // the deferred sync so it doesn't fire stale.
-                    if (partyChangeSuppressionActive && currentCount == 0)
-                    {
-                        PassportCheckerReborn.Framework.Update -= OnDeferredPartyCountSync;
-                        partyChangeSuppressionActive = false;
-                    }
-
-                    //PassportCheckerReborn.Log.Information($"[PartyFinderManager] Allowing close for {addonName} (currentCount={currentCount}, tracked={trackedPartyMemberCount}).");
-                    trackedPartyMemberCount = currentCount;
-                }
-                else
-                {
-                    //PassportCheckerReborn.Log.Information($"[PartyFinderManager] Config disabled or no PF windows open \u2014 allowing close for {addonName}.");
-                }
-            }
-        }
-        catch (Exception)
-        {
-            //PassportCheckerReborn.Log.Warning(ex, "[PartyFinderManager] Error in CloseAddonDetour.");
-        }
-
-        return closeAddonHook!.Original(unitBase, a1);
-    }
-
-    /// <summary>
-    /// Fires on the next framework tick after a party-change suppression.
-    /// Ends the suppression window, syncs the tracked count, and verifies
-    /// that suppressed addons are still alive (the game may have destroyed
-    /// them through another code path).
-    /// </summary>
-    private unsafe void OnDeferredPartyCountSync(IFramework framework)
-    {
-        PassportCheckerReborn.Framework.Update -= OnDeferredPartyCountSync;
-        partyChangeSuppressionActive = false;
-        // Prefer a fresh count, but fall back to the count that was observed when
-        // suppression triggered: during a cross-realm party join the proxy may still
-        // be transitioning on this tick and GetEffectivePartyCount() can return 0,
-        // which would reset trackedPartyMemberCount to 0 and permanently lock
-        // suppression active for all subsequent close calls.
-        var freshCount = GetEffectivePartyCount();
-        trackedPartyMemberCount = freshCount > 0 ? freshCount : suppressionObservedCount;
-
-        //PassportCheckerReborn.Log.Information($"[PartyFinderManager] Deferred sync: trackedCount={trackedPartyMemberCount}");
-
-        // Verify that suppressed addons are still alive. If the game destroyed
-        // one despite our suppression (e.g. via a different Close override or a
-        // secondary teardown path), clean up our state so the UI doesn't get stuck.
-        if (IsDetailOpen)
-        {
-            var ptr = PassportCheckerReborn.GameGui.GetAddonByName("LookingForGroupDetail");
-            if (ptr.IsNull)
-            {
-                //PassportCheckerReborn.Log.Warning("[PartyFinderManager] Detail was suppressed but addon is gone \u2014 cleaning up.");
-                resolveCts?.Cancel();
-                resolveCts?.Dispose();
-                resolveCts = null;
-                IsDetailOpen = false;
-                currentMembers.Clear();
-                currentDetailedPost = null;
-                CurrentDutyId = 0;
-                CurrentDutyName = string.Empty;
-                IsHighEndDuty = false;
-                plugin.CidCache.Save();
-            }
-        }
-
-        if (IsListOpen)
-        {
-            var ptr = PassportCheckerReborn.GameGui.GetAddonByName("LookingForGroup");
-            if (ptr.IsNull)
-            {
-                //PassportCheckerReborn.Log.Warning("[PartyFinderManager] List was suppressed but addon is gone \u2014 cleaning up.");
-                IsListOpen = false;
-                pendingRecruitmentContentId = 0;
-                StopAutoRefreshTimer();
-            }
-        }
-    }
-
     /// <summary>
     /// Returns the current party member count using the best available source.
     /// <see cref="IPartyList.Length"/> returns 0 for cross-world parties (which PF
     /// always creates), so we read from <see cref="InfoProxyCrossRealm"/> first.
     /// </summary>
-    private static unsafe int GetEffectivePartyCount()
+    public static unsafe int GetEffectivePartyCount()
     {
         try
         {
@@ -882,6 +713,12 @@ public sealed class PartyFinderManager : IDisposable
 
     private void OnPFListRefresh(AddonEvent type, AddonArgs args)
     {
+        // Reset auto-refresh timer when player manually refreshes
+        if (plugin.Configuration.EnableAutomaticRefresh)
+        {
+            autoRefreshCountdown = plugin.Configuration.AutoRefreshIntervalSeconds;
+        }
+
         TryProcessPendingRecruitment();
     }
 
@@ -894,7 +731,7 @@ public sealed class PartyFinderManager : IDisposable
     }
 
     // ═════════════════════════════════════════════════════════════════════════
-    // Auto-Refresh (TODO item 5 – functional logic, needs game-client testing)
+    // Auto-Refresh
     // ═════════════════════════════════════════════════════════════════════════
 
     private void StartAutoRefreshTimer()
@@ -1576,10 +1413,6 @@ public sealed class PartyFinderManager : IDisposable
         resolveCts?.Cancel();
         resolveCts?.Dispose();
 
-        // Remove deferred sync callback if pending
-        PassportCheckerReborn.Framework.Update -= OnDeferredPartyCountSync;
-        partyChangeSuppressionActive = false;
-
         StopAutoRefreshTimer();
         UnregisterContextMenu();
 
@@ -1596,7 +1429,6 @@ public sealed class PartyFinderManager : IDisposable
         populateListingHook?.Dispose();
         charaCardPacketHandlerHook?.Dispose();
         showLogMessageHook?.Dispose();
-        closeAddonHook?.Dispose();
         charaCardRequestGate.Dispose();
 
         currentMembers.Clear();

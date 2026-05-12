@@ -120,18 +120,27 @@ public class PartyListWindow(PassportCheckerReborn plugin) : Window("Party Membe
             switch (position)
             {
                 case PartyListOverlayPosition.Left:
-                    overlayX = vpPos.X + addonX - 310;
-                    if (overlayX < vpPos.X)
-                    {
-                        overlayX = vpPos.X; // Clamp to screen edge
-                    }
-
+                    // Anchor the top-right corner of the overlay to the left edge of the addon
+                    // so the window grows leftward and does not cover the party list.
+                    var anchorX = vpPos.X + addonX - 10;
                     overlayY = vpPos.Y + addonY;
+
+                    // Clamp so the left edge of the window (anchorX - windowWidth) stays on screen.
+                    // Use the previous frame's size for estimation; falls back to a safe default on first frame.
+                    var windowWidth = lastFrameSize.X;
+                    var vpSize = ImGui.GetMainViewport().Size;
+                    var minAnchorX = vpPos.X + windowWidth;
+                    var maxAnchorX = vpPos.X + vpSize.X;
+                    anchorX = Math.Clamp(anchorX, minAnchorX, maxAnchorX);
+
+                    ImGui.SetNextWindowPos(new Vector2(anchorX, overlayY), ImGuiCond.Always, new Vector2(1f, 0f));
+                    Position = null;
                     break;
 
                 case PartyListOverlayPosition.Right:
                     overlayX = vpPos.X + addonX + addonWidth + 5;
                     overlayY = vpPos.Y + addonY;
+                    Position = new Vector2(overlayX, overlayY);
                     break;
 
                 case PartyListOverlayPosition.Above:
@@ -142,18 +151,19 @@ public class PartyListWindow(PassportCheckerReborn plugin) : Window("Party Membe
                         overlayY = vpPos.Y; // Clamp to screen edge
                     }
 
+                    Position = new Vector2(overlayX, overlayY);
                     break;
 
                 case PartyListOverlayPosition.Below:
                     overlayX = vpPos.X + addonX;
                     overlayY = vpPos.Y + addonY + addonHeight + 5;
+                    Position = new Vector2(overlayX, overlayY);
                     break;
 
                 default:
                     return false;
             }
 
-            Position = new Vector2(overlayX, overlayY);
             return true;
         }
         catch (Exception)
@@ -219,11 +229,8 @@ public class PartyListWindow(PassportCheckerReborn plugin) : Window("Party Membe
         ImGui.Separator();
         ImGui.Spacing();
 
-        for (var i = 0; i < cachedPartyMembers.Count; i++)
-        {
-            var member = cachedPartyMembers[i];
-            DrawPartyMemberRow(member, i, cfg);
-        }
+        // Draw party members in a table for proper grid layout
+        DrawPartyMemberTable(cachedPartyMembers, cfg);
 
         if (fflogsBatchInProgress || tomestoneBatchInProgress)
         {
@@ -260,9 +267,69 @@ public class PartyListWindow(PassportCheckerReborn plugin) : Window("Party Membe
         lastFrameSize = ImGui.GetWindowSize();
     }
 
+    private void DrawPartyMemberTable(List<PartyMemberInfo> members, Configuration cfg)
+    {
+        if (members.Count == 0)
+        {
+            return;
+        }
+
+        var columnCount = 1; // Player name is always shown
+        if (cfg.ShowPartyJobIcons)
+        {
+            columnCount++;
+        }
+
+        if (cfg.EnableTomestoneIntegration && !string.IsNullOrEmpty(cfg.TomestoneApiKey))
+        {
+            columnCount++;
+        }
+
+        if (cfg.EnableFFLogsIntegrationOverlay && !string.IsNullOrEmpty(cfg.FFLogsClientId) && !string.IsNullOrEmpty(cfg.FFLogsClientSecret))
+        {
+            columnCount++;
+        }
+
+        var flags = ImGuiTableFlags.Borders | 
+                    ImGuiTableFlags.RowBg | 
+                    ImGuiTableFlags.SizingFixedFit | 
+                    ImGuiTableFlags.NoHostExtendX;
+
+        if (!ImGui.BeginTable("##PartyMemberTable", columnCount, flags))
+        {
+            return;
+        }
+
+        // Setup columns
+        if (cfg.ShowPartyJobIcons)
+        {
+            ImGui.TableSetupColumn("Job", ImGuiTableColumnFlags.WidthFixed, 30f);
+        }
+        ImGui.TableSetupColumn("Player", ImGuiTableColumnFlags.WidthFixed);
+        if (cfg.EnableTomestoneIntegration && !string.IsNullOrEmpty(cfg.TomestoneApiKey))
+        {
+            ImGui.TableSetupColumn("Tomestone", ImGuiTableColumnFlags.WidthFixed);
+        }
+        if (cfg.EnableFFLogsIntegrationOverlay && !string.IsNullOrEmpty(cfg.FFLogsClientId) && !string.IsNullOrEmpty(cfg.FFLogsClientSecret))
+        {
+            ImGui.TableSetupColumn("FFLogs", ImGuiTableColumnFlags.WidthFixed);
+        }
+        ImGui.TableHeadersRow();
+
+        // Draw each party member row
+        for (var i = 0; i < members.Count; i++)
+        {
+            var member = members[i];
+            DrawPartyMemberRow(member, i, cfg);
+        }
+
+        ImGui.EndTable();
+    }
+
     private void DrawPartyMemberRow(PartyMemberInfo member, int index, Configuration cfg)
     {
         ImGui.PushID($"party_{index}");
+        ImGui.TableNextRow();
 
         var jobIconId = 0u;
         if (!string.IsNullOrWhiteSpace(member.JobAbbreviation))
@@ -275,9 +342,10 @@ public class PartyListWindow(PassportCheckerReborn plugin) : Window("Party Membe
             }
         }
 
-        // ── Job icon ────────────────────────────────────────────────────────
+        // ── Job icon column ──────────────────────────────────────────────────
         if (cfg.ShowPartyJobIcons)
         {
+            ImGui.TableNextColumn();
             try
             {
                 var iconLookup = new GameIconLookup(jobIconId);
@@ -286,131 +354,160 @@ public class PartyListWindow(PassportCheckerReborn plugin) : Window("Party Membe
 
                 if (texture is not null)
                 {
-                    ImGui.Image(texture.Handle, new Vector2(20, 20));
-                    ImGui.SameLine();
+                    ImGui.Image(texture.Handle, new Vector2(24, 24));
                 }
                 else
                 {
-                    ImGui.TextColored(new Vector4(0.8f, 0.8f, 0.2f, 1.0f), $"[{member.JobAbbreviation,-3}]");
-                    ImGui.SameLine();
+                    ImGui.TextColored(new Vector4(0.8f, 0.8f, 0.2f, 1.0f), member.JobAbbreviation);
                 }
             }
             catch
             {
-                ImGui.TextColored(new Vector4(0.8f, 0.8f, 0.2f, 1.0f), $"[{member.JobAbbreviation,-3}]");
-                ImGui.SameLine();
+                ImGui.TextColored(new Vector4(0.8f, 0.8f, 0.2f, 1.0f), member.JobAbbreviation);
             }
         }
 
-        // Player name + world
+        // ── Player name column ───────────────────────────────────────────────
+        ImGui.TableNextColumn();
         var displayName = string.IsNullOrEmpty(member.World)
             ? member.Name
             : $"{member.Name}@{member.World}";
         ImGui.TextUnformatted(displayName);
 
-        // ── Cached FFLogs data ──────────────────────────────────────────────
-        if (cfg.EnableFFLogsIntegrationOverlay && !string.IsNullOrEmpty(cfg.FFLogsClientId) && !string.IsNullOrEmpty(cfg.FFLogsClientSecret) && fflogsCache.TryGetValue(index, out var cachedFf))
+        // ── Tomestone data column ────────────────────────────────────────────
+        if (cfg.EnableTomestoneIntegration && !string.IsNullOrEmpty(cfg.TomestoneApiKey))
         {
-            ImGui.SameLine();
-            if (cachedFf is null || !cachedFf.HasData)
+            ImGui.TableNextColumn();
+            if (tomestoneCache.TryGetValue(index, out var cachedTs))
             {
-                PFWindow.DrawNoLogsWithAverage(cachedFf?.AverageParsePercent);
-            }
-            else if (cachedFf.BestParse.HasValue)
-            {
-                // Show best parse for current job
-                if (cachedFf.CurrentJobBestParse.HasValue)
-                {
-                    var color = PFWindow.GetParseColor(cachedFf.CurrentJobBestParse.Value);
-                    ImGui.TextColored(color, $"{cachedFf.CurrentJobBestParse.Value:F0}%");
-                }
-                else
-                {
-                    var color = PFWindow.GetParseColor(cachedFf.BestParse.Value);
-                    ImGui.TextColored(color, $"{cachedFf.BestParse.Value:F0}%");
-                }
-
-                // If best parse is on a different job, show it with icon
-                if (cachedFf.BestParseJobAbbreviation != null &&
-                    !string.Equals(cachedFf.BestParseJobAbbreviation, member.JobAbbreviation,
-                        StringComparison.OrdinalIgnoreCase) &&
-                    (!cachedFf.CurrentJobBestParse.HasValue ||
-                     cachedFf.BestParse.Value > cachedFf.CurrentJobBestParse.Value))
-                {
-                    PFWindow.DrawJobSpecBestParse(cachedFf.BestParse.Value,
-                        cachedFf.BestParseJobAbbreviation, cachedFf.BestParseJobIconId);
-                }
-            }
-            else if (cachedFf.AverageParsePercent.HasValue)
-            {
-                PFWindow.DrawNoLogsWithAverage(cachedFf.AverageParsePercent);
+                DrawTomestoneCell(cachedTs);
             }
             else
             {
-                ImGui.TextColored(new Vector4(0.6f, 0.6f, 0.6f, 1.0f), "No logs");
+                ImGui.TextColored(new Vector4(0.6f, 0.6f, 0.6f, 1.0f), "Loading...");
             }
         }
 
-        // ── Cached Tomestone data ───────────────────────────────────────────
-        if (cfg.EnableTomestoneIntegration && !string.IsNullOrEmpty(cfg.TomestoneApiKey) && tomestoneCache.TryGetValue(index, out var cachedTs))
+        // ── FFLogs data column ───────────────────────────────────────────────
+        if (cfg.EnableFFLogsIntegrationOverlay && !string.IsNullOrEmpty(cfg.FFLogsClientId) && !string.IsNullOrEmpty(cfg.FFLogsClientSecret))
         {
-            ImGui.SameLine();
-            if (cachedTs != null)
+            ImGui.TableNextColumn();
+            if (fflogsCache.TryGetValue(index, out var cachedFf))
             {
-                var hasClears = cachedTs.TotalClears.HasValue && cachedTs.TotalClears.Value > 0;
-                var hasProgPoint = !string.IsNullOrWhiteSpace(cachedTs.ProgPoint);
-                var hasBestParse = cachedTs.BestPercent.HasValue;
-
-                if (hasClears)
-                {
-                    var clearsColor = new Vector4(0.4f, 0.8f, 0.4f, 1.0f);
-                    var clearsText = "Cleared";
-                    if (!string.IsNullOrWhiteSpace(cachedTs.CompletionWeek))
-                    {
-                        clearsText += $" ({cachedTs.CompletionWeek})";
-                    }
-
-                    if (hasBestParse)
-                    {
-                        clearsText += $" | Best: {cachedTs.BestPercent:F0}%";
-                    }
-
-                    ImGui.TextColored(clearsColor, clearsText);
-                }
-                else if (hasProgPoint)
-                {
-                    var progText = cachedTs.ProgPoint!;
-                    if (!string.IsNullOrWhiteSpace(cachedTs.DisplayPercent))
-                    {
-                        progText += $" ({cachedTs.DisplayPercent})";
-                    }
-
-                    ImGui.TextColored(new Vector4(0.8f, 0.8f, 0.2f, 1.0f), progText);
-                }
-                else if (hasBestParse)
-                {
-                    ImGui.TextColored(new Vector4(0.8f, 0.8f, 0.2f, 1.0f),
-                        $"Best: {cachedTs.BestPercent:F0}%");
-                }
-                else
-                {
-                    ImGui.TextColored(new Vector4(0.6f, 0.6f, 0.6f, 1.0f), "No data");
-                }
+                DrawFFLogsCell(cachedFf, member);
             }
             else
             {
-                ImGui.TextColored(new Vector4(0.6f, 0.6f, 0.6f, 1.0f), "No data");
+                ImGui.TextColored(new Vector4(0.6f, 0.6f, 0.6f, 1.0f), "Loading...");
             }
         }
 
         ImGui.PopID();
     }
 
+    private static void DrawFFLogsCell(EncounterParseResult? cachedFf, PartyMemberInfo member)
+    {
+        if (cachedFf is null || !cachedFf.HasData)
+        {
+            if (cachedFf?.AverageParsePercent.HasValue == true)
+            {
+                var avgColor = PFWindow.GetParseColor(cachedFf.AverageParsePercent.Value);
+                ImGui.TextColored(avgColor, $"Avg: {cachedFf.AverageParsePercent.Value:F0}%");
+            }
+            else
+            {
+                ImGui.TextColored(new Vector4(0.6f, 0.6f, 0.6f, 1.0f), "No logs");
+            }
+            return;
+        }
+
+        if (cachedFf.BestParse.HasValue)
+        {
+            // Show best parse for current job
+            if (cachedFf.CurrentJobBestParse.HasValue)
+            {
+                var color = PFWindow.GetParseColor(cachedFf.CurrentJobBestParse.Value);
+                ImGui.TextColored(color, $"{cachedFf.CurrentJobBestParse.Value:F0}%");
+            }
+            else
+            {
+                var color = PFWindow.GetParseColor(cachedFf.BestParse.Value);
+                ImGui.TextColored(color, $"{cachedFf.BestParse.Value:F0}%");
+            }
+
+            // If best parse is on a different job, show it on a new line
+            if (cachedFf.BestParseJobAbbreviation != null &&
+                !string.Equals(cachedFf.BestParseJobAbbreviation, member.JobAbbreviation,
+                    StringComparison.OrdinalIgnoreCase) &&
+                (!cachedFf.CurrentJobBestParse.HasValue ||
+                 cachedFf.BestParse.Value > cachedFf.CurrentJobBestParse.Value))
+            {
+                var bestColor = PFWindow.GetParseColor(cachedFf.BestParse.Value);
+                ImGui.TextColored(bestColor, $"({cachedFf.BestParseJobAbbreviation}: {cachedFf.BestParse.Value:F0}%)");
+            }
+        }
+        else if (cachedFf.AverageParsePercent.HasValue)
+        {
+            var avgColor = PFWindow.GetParseColor(cachedFf.AverageParsePercent.Value);
+            ImGui.TextColored(avgColor, $"Avg: {cachedFf.AverageParsePercent.Value:F0}%");
+        }
+        else
+        {
+            ImGui.TextColored(new Vector4(0.6f, 0.6f, 0.6f, 1.0f), "No logs");
+        }
+    }
+
+    private static void DrawTomestoneCell(TomestoneCharacterInfo? cachedTs)
+    {
+        if (cachedTs == null)
+        {
+            ImGui.TextColored(new Vector4(0.6f, 0.6f, 0.6f, 1.0f), "No data");
+            return;
+        }
+
+        var hasClears = cachedTs.TotalClears.HasValue && cachedTs.TotalClears.Value > 0;
+        var hasProgPoint = !string.IsNullOrWhiteSpace(cachedTs.ProgPoint);
+        var hasBestParse = cachedTs.BestPercent.HasValue;
+
+        if (hasClears)
+        {
+            var clearsColor = new Vector4(0.4f, 0.8f, 0.4f, 1.0f);
+            var clearsText = "Cleared";
+            if (!string.IsNullOrWhiteSpace(cachedTs.CompletionWeek))
+            {
+                clearsText += $" ({cachedTs.CompletionWeek})";
+            }
+            ImGui.TextColored(clearsColor, clearsText);
+
+            if (hasBestParse)
+            {
+                ImGui.TextColored(clearsColor, $"Best: {cachedTs.BestPercent:F0}%");
+            }
+        }
+        else if (hasProgPoint)
+        {
+            var progText = cachedTs.ProgPoint!;
+            if (!string.IsNullOrWhiteSpace(cachedTs.DisplayPercent))
+            {
+                progText += $" ({cachedTs.DisplayPercent})";
+            }
+            ImGui.TextColored(new Vector4(0.8f, 0.8f, 0.2f, 1.0f), progText);
+        }
+        else if (hasBestParse)
+        {
+            ImGui.TextColored(new Vector4(0.8f, 0.8f, 0.2f, 1.0f), $"Best: {cachedTs.BestPercent:F0}%");
+        }
+        else
+        {
+            ImGui.TextColored(new Vector4(0.6f, 0.6f, 0.6f, 1.0f), "No data");
+        }
+    }
+
     /// <summary>
     /// Reads party members from the Dalamud IPartyList service, falling back to
     /// <see cref="InfoProxyCrossRealm"/> for crossworld parties when IPartyList is empty.
     /// </summary>
-    private static List<PartyMemberInfo> ReadPartyMembers()
+    private List<PartyMemberInfo> ReadPartyMembers()
     {
         var result = new List<PartyMemberInfo>();
 
@@ -434,10 +531,18 @@ public class PartyListWindow(PassportCheckerReborn plugin) : Window("Party Membe
                     }
 
                     var world = member.World.ValueNullable?.Name.ToString() ?? string.Empty;
+                    var worldId = member.World.RowId;
                     var classJob = member.ClassJob.ValueNullable;
                     var jobAbbreviation = classJob?.Abbreviation.ToString() ?? "???";
+                    var contentId = member.ContentId;
 
-                    result.Add(new PartyMemberInfo(name, world, jobAbbreviation));
+                    // Add to CidCache if we have a valid ContentId
+                    if (contentId != 0 && !string.IsNullOrEmpty(world))
+                    {
+                        plugin.CidCache.Set(contentId, name, (ushort)worldId, world);
+                    }
+
+                    result.Add(new PartyMemberInfo(name, world, jobAbbreviation, contentId));
                 }
 
                 return result;
@@ -457,7 +562,7 @@ public class PartyListWindow(PassportCheckerReborn plugin) : Window("Party Membe
     /// Reads party members from <see cref="InfoProxyCrossRealm"/> when in a crossworld party.
     /// This provides member data (including ContentId) even when <see cref="Dalamud.Plugin.Services.IPartyList"/> hasn't populated.
     /// </summary>
-    private static unsafe List<PartyMemberInfo> ReadCrossRealmPartyMembers()
+    private unsafe List<PartyMemberInfo> ReadCrossRealmPartyMembers()
     {
         var result = new List<PartyMemberInfo>();
         try
@@ -492,6 +597,13 @@ public class PartyListWindow(PassportCheckerReborn plugin) : Window("Party Membe
                 var jobAbbreviation = classJobSheet?.GetRowOrDefault(member.ClassJobId)?.Abbreviation.ToString()
                     ?? "???";
                 var contentId = member.ContentId;
+
+                // Add to CidCache if we have a valid ContentId
+                if (contentId != 0 && !string.IsNullOrEmpty(worldName))
+                {
+                    plugin.CidCache.Set(contentId, member.NameString, (ushort)member.HomeWorld, worldName);
+                }
+
                 result.Add(new PartyMemberInfo(member.NameString, worldName, jobAbbreviation, contentId));
             }
         }

@@ -131,12 +131,14 @@ public class MainWindow : Window, IDisposable
             Configuration.Save();
         }
 
-        var preventAutoClose = Configuration.PreventAutoClosingOnPartyChanges;
-        if (ImGui.Checkbox("Prevent Party Finder Window from Auto-Closing on Party Changes", ref preventAutoClose))
+        ImGui.BeginDisabled();
+        var preventAutoClose = Configuration.PreventAutoClosingOnPartyChanges2;
+        if (ImGui.Checkbox("Prevent Party Finder Window from Auto-Closing on Party Changes (Broken, being fixed)", ref preventAutoClose))
         {
-            Configuration.PreventAutoClosingOnPartyChanges = preventAutoClose;
+            Configuration.PreventAutoClosingOnPartyChanges2 = preventAutoClose;
             Configuration.Save();
         }
+        ImGui.EndDisabled();
 
         ImGui.Spacing();
         ImGui.TextColored(new Vector4(1.0f, 0.85f, 0.0f, 1.0f), "Party Finder List Optimizations");

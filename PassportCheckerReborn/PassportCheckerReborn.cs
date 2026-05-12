@@ -63,6 +63,7 @@ public sealed class PassportCheckerReborn : IAsyncDalamudPlugin
         await Framework.RunOnFrameworkThread(() =>
         {
             PartyFinderManager = new PartyFinderManager(this);
+            PFWindowManager.Enable(this, PartyFinderManager);
 
             MainWindow = new MainWindow(this);
             PFWindow = new PFWindow(this);
@@ -114,6 +115,8 @@ public sealed class PassportCheckerReborn : IAsyncDalamudPlugin
             CommandManager.RemoveHandler(ALTCOMMAND);
             CommandManager.RemoveHandler(PartyListCommandName);
         });
+
+        PFWindowManager.Disable();
 
         CidCache?.Dispose();
         BlacklistCache?.Dispose();

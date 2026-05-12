@@ -25,7 +25,7 @@ public class Configuration : IPluginConfiguration
     public bool SpecialBorderColorForKnownPlayers { get; set; } = false;
     public Vector4 KnownPlayerBorderColor { get; set; } = new Vector4(0.2f, 0.8f, 0.2f, 1.0f);
     public bool ShowPartyJobIcons { get; set; } = true;
-    public bool PreventAutoClosingOnPartyChanges { get; set; } = false;
+    public bool PreventAutoClosingOnPartyChanges2 { get; set; } = false;
 
     // ── General ─ Party Finder List Optimizations ────────────────────────────
     public bool EnableTrueTimeBasedSorting { get; set; } = false;

@@ -465,6 +465,12 @@ public class PartyListWindow(PassportCheckerReborn plugin) : Window("Party Membe
             return;
         }
 
+        if (cachedTs.NoLogs)
+        {
+            ImGui.TextColored(new Vector4(0.6f, 0.6f, 0.6f, 1.0f), "No Logs");
+            return;
+        }
+
         var hasClears = cachedTs.TotalClears.HasValue && cachedTs.TotalClears.Value > 0;
         var hasProgPoint = !string.IsNullOrWhiteSpace(cachedTs.ProgPoint);
         var hasBestParse = cachedTs.BestPercent.HasValue;

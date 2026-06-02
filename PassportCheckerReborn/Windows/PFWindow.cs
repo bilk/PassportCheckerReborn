@@ -149,7 +149,7 @@ public class PFWindow(PassportCheckerReborn plugin) : Window("PF Member Info##PF
 
         var members = plugin.PartyFinderManager.CurrentMembers;
 
-        ImGui.TextColored(new Vector4(0.4f, 0.8f, 1.0f, 1.0f), "PF Member Info");
+        ImGui.TextColored(new Vector4(0.4f, 0.8f, 1.0f, 1.0f), $"PF Member Info - {plugin.PartyFinderManager.CurrentDutyName}");
         ImGui.Separator();
         ImGui.Spacing();
 
@@ -434,57 +434,64 @@ public class PFWindow(PassportCheckerReborn plugin) : Window("PF Member Info##PF
             ImGui.TableNextColumn();
             if (!member.IsPrivate && tomestoneFetched)
             {
-                if (tomestoneBatchInProgress)
-                {
-                    ImGui.TextColored(new Vector4(0.6f, 0.6f, 0.6f, 1.0f), "\u2026");
-                }
-                else if (tomestoneInfoCache.TryGetValue(index, out var cachedTs))
+                if (tomestoneInfoCache.TryGetValue(index, out var cachedTs))
                 {
                     if (cachedTs != null)
                     {
-                        var hasClears = cachedTs.TotalClears.HasValue && cachedTs.TotalClears.Value > 0;
-                        var hasProgPoint = !string.IsNullOrWhiteSpace(cachedTs.ProgPoint);
-                        var hasBestParse = cachedTs.BestPercent.HasValue;
-
-                        if (hasClears)
+                        if (cachedTs.NoLogs)
                         {
-                            var clearsText = "Cleared";
-                            if (!string.IsNullOrWhiteSpace(cachedTs.CompletionWeek))
-                            {
-                                clearsText += $" ({cachedTs.CompletionWeek})";
-                            }
-
-                            if (hasBestParse)
-                            {
-                                clearsText += $" | Best: {cachedTs.BestPercent:F0}%";
-                            }
-
-                            ImGui.TextColored(new Vector4(0.4f, 0.8f, 0.4f, 1.0f), clearsText);
-                        }
-                        else if (hasProgPoint)
-                        {
-                            var progText = cachedTs.ProgPoint!;
-                            if (!string.IsNullOrWhiteSpace(cachedTs.DisplayPercent))
-                            {
-                                progText += $" ({cachedTs.DisplayPercent})";
-                            }
-
-                            ImGui.TextColored(new Vector4(0.8f, 0.8f, 0.2f, 1.0f), progText);
-                        }
-                        else if (hasBestParse)
-                        {
-                            ImGui.TextColored(new Vector4(0.8f, 0.8f, 0.2f, 1.0f),
-                                $"Best: {cachedTs.BestPercent:F0}%");
+                            ImGui.TextColored(new Vector4(0.6f, 0.6f, 0.6f, 1.0f), "No Logs");
                         }
                         else
                         {
-                            ImGui.TextColored(new Vector4(0.6f, 0.6f, 0.6f, 1.0f), "Hidden Profile");
+                            var hasClears = cachedTs.TotalClears.HasValue && cachedTs.TotalClears.Value > 0;
+                            var hasProgPoint = !string.IsNullOrWhiteSpace(cachedTs.ProgPoint);
+                            var hasBestParse = cachedTs.BestPercent.HasValue;
+
+                            if (hasClears)
+                            {
+                                var clearsText = "Cleared";
+                                if (!string.IsNullOrWhiteSpace(cachedTs.CompletionWeek))
+                                {
+                                    clearsText += $" ({cachedTs.CompletionWeek})";
+                                }
+
+                                if (hasBestParse)
+                                {
+                                    clearsText += $" | Best: {cachedTs.BestPercent:F0}%";
+                                }
+
+                                ImGui.TextColored(new Vector4(0.4f, 0.8f, 0.4f, 1.0f), clearsText);
+                            }
+                            else if (hasProgPoint)
+                            {
+                                var progText = cachedTs.ProgPoint!;
+                                if (!string.IsNullOrWhiteSpace(cachedTs.DisplayPercent))
+                                {
+                                    progText += $" ({cachedTs.DisplayPercent})";
+                                }
+
+                                ImGui.TextColored(new Vector4(0.8f, 0.8f, 0.2f, 1.0f), progText);
+                            }
+                            else if (hasBestParse)
+                            {
+                                ImGui.TextColored(new Vector4(0.8f, 0.8f, 0.2f, 1.0f),
+                                    $"Best: {cachedTs.BestPercent:F0}%");
+                            }
+                            else
+                            {
+                                ImGui.TextColored(new Vector4(0.6f, 0.6f, 0.6f, 1.0f), "Hidden Profile");
+                            }
                         }
                     }
                     else
                     {
                         ImGui.TextColored(new Vector4(0.6f, 0.6f, 0.6f, 1.0f), "Hidden Profile");
                     }
+                }
+                else if (tomestoneBatchInProgress)
+                {
+                    ImGui.TextColored(new Vector4(0.6f, 0.6f, 0.6f, 1.0f), "\u2026");
                 }
             }
         }
@@ -495,11 +502,7 @@ public class PFWindow(PassportCheckerReborn plugin) : Window("PF Member Info##PF
             ImGui.TableNextColumn();
             if (!member.IsPrivate && fflogsFetched)
             {
-                if (fflogsBatchInProgress)
-                {
-                    ImGui.TextColored(new Vector4(0.6f, 0.6f, 0.6f, 1.0f), "\u2026");
-                }
-                else if (fflogsEncounterCache.TryGetValue(index, out var cachedFf))
+                if (fflogsEncounterCache.TryGetValue(index, out var cachedFf))
                 {
                     if (cachedFf is null || !cachedFf.HasData)
                     {
@@ -613,6 +616,10 @@ public class PFWindow(PassportCheckerReborn plugin) : Window("PF Member Info##PF
                         }
                     }
                 }
+                else if (fflogsBatchInProgress)
+                {
+                    ImGui.TextColored(new Vector4(0.6f, 0.6f, 0.6f, 1.0f), "\u2026");
+                }
             }
         }
 
@@ -623,13 +630,12 @@ public class PFWindow(PassportCheckerReborn plugin) : Window("PF Member Info##PF
     /// Fetches FFLogs encounter data for all members in a batch.
     /// Uses encounter-specific queries when the duty is detected,
     /// falls back to general zone parse otherwise.
+    /// Updates the cache progressively as data is fetched.
     /// </summary>
     private async Task FetchAllFFLogsDataAsync(IReadOnlyList<PartyMemberInfo> members)
     {
         try
         {
-            var tempCache = new Dictionary<int, EncounterParseResult?>();
-
             var encounterIds = FFLogsService.GetEncounterIdsForDuty(
                 plugin.PartyFinderManager.CurrentDutyName);
 
@@ -662,17 +668,18 @@ public class PFWindow(PassportCheckerReborn plugin) : Window("PF Member Info##PF
                         memberData, encounterIds.Value.PrimaryEncounterId);
                 }
 
+                // Update cache immediately with bulk results
                 foreach (var (index, result) in results)
                 {
-                    tempCache[index] = result;
+                    fflogsEncounterCache[index] = result;
                 }
 
                 // Fill in any missing indices
                 for (var i = 0; i < members.Count; i++)
                 {
-                    if (!tempCache.ContainsKey(i))
+                    if (!fflogsEncounterCache.ContainsKey(i))
                     {
-                        tempCache[i] = new EncounterParseResult(false, true, 0, null, null, null);
+                        fflogsEncounterCache[i] = new EncounterParseResult(false, true, 0, null, null, null);
                     }
                 }
 
@@ -680,7 +687,7 @@ public class PFWindow(PassportCheckerReborn plugin) : Window("PF Member Info##PF
                 // general average parse so we can show "No logs - Average percentage parse X%"
                 for (var i = 0; i < members.Count; i++)
                 {
-                    var cached = tempCache[i];
+                    var cached = fflogsEncounterCache[i];
                     var hasEncounterData = cached is not null &&
                                            (cached.TotalKills > 0 ||
                                             cached.LowestBossHpPct.HasValue ||
@@ -698,7 +705,7 @@ public class PFWindow(PassportCheckerReborn plugin) : Window("PF Member Info##PF
                                 members[i].Name, members[i].World);
                             if (avg.HasValue)
                             {
-                                tempCache[i] = cached with { AverageParsePercent = avg.Value };
+                                fflogsEncounterCache[i] = cached with { AverageParsePercent = avg.Value };
                             }
                         }
                         catch (Exception)
@@ -709,7 +716,7 @@ public class PFWindow(PassportCheckerReborn plugin) : Window("PF Member Info##PF
             }
             else
             {
-                // Fallback: general zone parse for each member (sequential to avoid dictionary races)
+                // Fallback: general zone parse for each member - update cache progressively
                 for (var i = 0; i < members.Count; i++)
                 {
                     var member = members[i];
@@ -717,7 +724,7 @@ public class PFWindow(PassportCheckerReborn plugin) : Window("PF Member Info##PF
                         || member.Name.StartsWith(PartyFinderManager.UnresolvedNamePrefix)
                         || member.Name.StartsWith(PartyFinderManager.UnresolvedPlayerPrefix))
                     {
-                        tempCache[i] = null;
+                        fflogsEncounterCache[i] = null;
                         continue;
                     }
 
@@ -725,7 +732,7 @@ public class PFWindow(PassportCheckerReborn plugin) : Window("PF Member Info##PF
                     {
                         var avg = await plugin.FFLogsService.GetBestPerfAvgAsync(
                             member.Name, member.World);
-                        tempCache[i] = avg.HasValue
+                        fflogsEncounterCache[i] = avg.HasValue
                             ? new EncounterParseResult(true, false, 0, avg.Value, null, null)
                             : new EncounterParseResult(false, false, 0, null, null, null);
                     }
@@ -733,13 +740,10 @@ public class PFWindow(PassportCheckerReborn plugin) : Window("PF Member Info##PF
                     {
                         PassportCheckerReborn.Log.Warning(ex,
                             $"[OverlayWindow] FFLogs lookup failed for {member.Name}@{member.World}");
-                        tempCache[i] = null;
+                        fflogsEncounterCache[i] = null;
                     }
                 }
             }
-
-            // Swap atomically so the UI never sees a partially populated cache
-            fflogsEncounterCache = tempCache;
         }
         catch (Exception ex)
         {
@@ -778,12 +782,12 @@ public class PFWindow(PassportCheckerReborn plugin) : Window("PF Member Info##PF
     /// <summary>
     /// Fetches Tomestone character info for all members in a batch.
     /// Passes the current duty name so the API can return encounter-specific data.
+    /// Updates the cache progressively as each player's data is fetched.
     /// </summary>
     private async Task FetchAllTomestoneInfoAsync(IReadOnlyList<PartyMemberInfo> members)
     {
         try
         {
-            var tempCache = new Dictionary<int, TomestoneCharacterInfo?>();
             var dutyName = plugin.PartyFinderManager.CurrentDutyName;
 
             for (var i = 0; i < members.Count; i++)
@@ -793,7 +797,7 @@ public class PFWindow(PassportCheckerReborn plugin) : Window("PF Member Info##PF
                     || member.Name.StartsWith(PartyFinderManager.UnresolvedNamePrefix)
                     || member.Name.StartsWith(PartyFinderManager.UnresolvedPlayerPrefix))
                 {
-                    tempCache[i] = null;
+                    tomestoneInfoCache[i] = null;
                     continue;
                 }
 
@@ -801,18 +805,15 @@ public class PFWindow(PassportCheckerReborn plugin) : Window("PF Member Info##PF
                 {
                     var info = await plugin.TomestoneService.GetCharacterInfoAsync(
                         member.Name, member.World, dutyName);
-                    tempCache[i] = info;
+                    tomestoneInfoCache[i] = info;
                 }
                 catch (Exception ex)
                 {
                     PassportCheckerReborn.Log.Warning(ex,
                         $"[OverlayWindow] Tomestone lookup failed for {member.Name}@{member.World}");
-                    tempCache[i] = null;
+                    tomestoneInfoCache[i] = null;
                 }
             }
-
-            // Swap atomically so the UI never sees a partially populated cache
-            tomestoneInfoCache = tempCache;
         }
         catch (Exception ex)
         {

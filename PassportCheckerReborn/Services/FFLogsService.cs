@@ -491,7 +491,8 @@ public sealed class FFLogsService : IDisposable
         ["The Epic of Alexander (Ultimate)"] = (59, 1075, DifficultyNormal),
         ["Dragonsong's Reprise (Ultimate)"] = (59, 1076, DifficultyNormal),
         ["The Omega Protocol (Ultimate)"] = (59, 1077, DifficultyNormal),
-        ["Futures Rewritten (Ultimate)"] = (59, 1079, DifficultyNormal),
+        ["Futures Rewritten (Ultimate)"] = (65, 1079, DifficultyNormal),
+        ["Dancing Mad (Ultimate)"] = (76, 1085, DifficultyNormal),
     };
 
     /// <summary>Backwards-compatible helper that returns only the encounter ID.</summary>

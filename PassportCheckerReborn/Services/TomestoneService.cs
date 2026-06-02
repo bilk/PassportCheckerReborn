@@ -374,6 +374,13 @@ public sealed partial class TomestoneService : IDisposable
             var json = await response.Content.ReadAsStringAsync();
             //PassportCheckerReborn.Log.Debug($"[TomestoneService] progression-graph response: {json}");
 
+            // Check if the response is an empty array "[]" which indicates a hidden profile
+            if (json.Trim() == "[]")
+            {
+                info.NoLogs = true;
+                return;
+            }
+
             using var doc = JsonDocument.Parse(json);
             var root = doc.RootElement;
 
@@ -414,6 +421,13 @@ public sealed partial class TomestoneService : IDisposable
             var json = await response.Content.ReadAsStringAsync();
             //PassportCheckerReborn.Log.Debug($"[TomestoneService] activity response: {json}");
 
+            // Check if the response is an empty array "[]" which indicates a hidden profile
+            if (json.Trim() == "[]")
+            {
+                info.NoLogs = true;
+                return;
+            }
+
             using var doc = JsonDocument.Parse(json);
             var root = doc.RootElement;
 
@@ -447,6 +461,13 @@ public sealed partial class TomestoneService : IDisposable
 
             var json = await response.Content.ReadAsStringAsync();
             //PassportCheckerReborn.Log.Debug($"[TomestoneService] profile response: {json}");
+
+            // Check if the response is an empty array "[]" which indicates a hidden profile
+            if (json.Trim() == "[]")
+            {
+                info.NoLogs = true;
+                return;
+            }
 
             using var doc = JsonDocument.Parse(json);
             var root = doc.RootElement;
@@ -500,6 +521,13 @@ public sealed partial class TomestoneService : IDisposable
 
             var json = await response.Content.ReadAsStringAsync();
             //PassportCheckerReborn.Log.Debug($"[TomestoneService] full-profile response: {json}");
+
+            // Check if the response is an empty array "[]" which indicates a hidden profile
+            if (json.Trim() == "[]")
+            {
+                info.NoLogs = true;
+                return;
+            }
 
             using var doc = JsonDocument.Parse(json);
             var root = doc.RootElement;
@@ -991,4 +1019,5 @@ public class TomestoneCharacterInfo
     public int? TotalClears { get; set; }
     public string? CompletionWeek { get; set; }
     public double? BestPercent { get; set; }
+    public bool NoLogs { get; set; }
 }

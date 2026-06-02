@@ -1022,6 +1022,7 @@ public sealed class PartyFinderManager : IDisposable
                 var cfcName = GetDutyNameFromId(CurrentDutyId);
                 if (!string.IsNullOrEmpty(cfcName))
                 {
+                    //PassportCheckerReborn.Log.Info($"[PartyFinderManager] PF Duty Detected \"{cfcName}\".");
                     CurrentDutyName = cfcName;
                 }
 

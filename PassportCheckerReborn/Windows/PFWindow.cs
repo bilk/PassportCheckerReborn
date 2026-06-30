@@ -637,6 +637,7 @@ public class PFWindow(PassportCheckerReborn plugin) : Window("PF Member Info##PF
         try
         {
             var encounterIds = FFLogsService.GetEncounterIdsForDuty(
+                plugin.PartyFinderManager.CurrentDutyId,
                 plugin.PartyFinderManager.CurrentDutyName);
 
             if (encounterIds.HasValue)

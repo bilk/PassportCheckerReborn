@@ -6,6 +6,8 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
+using Dalamud.Game;
+using Lumina.Excel.Sheets;
 
 namespace PassportCheckerReborn.Services;
 
@@ -584,6 +586,53 @@ public sealed class FFLogsService : IDisposable
         }
 
         return DutyNameToEncounterId.TryGetValue(dutyName!, out var id) ? (id, null) : null;
+    }
+
+    /// <summary>
+    /// Returns the FFLogs encounter IDs for the given ContentFinderCondition RowId.
+    /// The RowId is language-neutral; it is resolved through the English
+    /// ContentFinderCondition sheet so the existing FFLogs name map remains the
+    /// single content-tier mapping.
+    /// </summary>
+    public static (int PrimaryEncounterId, int? SecondaryEncounterId)? GetEncounterIdsForDuty(
+        uint dutyId,
+        string? fallbackDutyName = null)
+    {
+        if (dutyId > 0)
+        {
+            var englishDutyName = GetEnglishDutyNameFromId(dutyId);
+            var ids = GetEncounterIdsForDuty(englishDutyName);
+            if (ids.HasValue)
+            {
+                return ids;
+            }
+        }
+
+        return GetEncounterIdsForDuty(fallbackDutyName);
+    }
+
+    /// <summary>
+    /// Returns English Duty Name from Duty ID.
+    /// </summary>
+    private static string? GetEnglishDutyNameFromId(uint dutyId)
+    {
+        try
+        {
+            var sheet = PassportCheckerReborn.DataManager.GetExcelSheet<ContentFinderCondition>(ClientLanguage.English);
+            var row = sheet.GetRowOrDefault(dutyId);
+            if (row == null)
+            {
+                return null;
+            }
+
+            var resolvedName = row.Value.Name.ToString();
+            return string.IsNullOrWhiteSpace(resolvedName) ? null : resolvedName;
+        }
+        catch (Exception ex)
+        {
+            PassportCheckerReborn.Log.Warning(ex, "[FFLogsService] Failed to resolve English duty name for id {0}.", dutyId);
+            return null;
+        }
     }
 
     /// <summary>

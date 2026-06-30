@@ -728,6 +728,14 @@ public class PartyListWindow(PassportCheckerReborn plugin) : Window("Party Membe
         => selectedDutyName ?? plugin.PartyFinderManager.CurrentDutyName;
 
     /// <summary>
+    /// Returns the effective duty identifier for FFLogs.
+    /// </summary>
+    private (uint DutyId, string? DutyName) GetEffectiveDutyForFflogs()
+        => selectedDutyName is not null
+            ? (0, selectedDutyName)
+            : (plugin.PartyFinderManager.CurrentDutyId, plugin.PartyFinderManager.CurrentDutyName);
+
+    /// <summary>
     /// Fetches FFLogs data for all party members.
     /// Uses the selected duty name or the PF overlay's current duty name for
     /// encounter-specific queries, falling back to general zone parse.
@@ -740,8 +748,8 @@ public class PartyListWindow(PassportCheckerReborn plugin) : Window("Party Membe
             var tempCache = new Dictionary<int, EncounterParseResult?>();
 
             // Try to get encounter data if a duty is detected
-            var dutyName = GetEffectiveDutyName();
-            var encounterIds = FFLogsService.GetEncounterIdsForDuty(dutyName);
+            var (dutyId, dutyName) = GetEffectiveDutyForFflogs();
+            var encounterIds = FFLogsService.GetEncounterIdsForDuty(dutyId, dutyName);
 
             if (encounterIds.HasValue)
             {
